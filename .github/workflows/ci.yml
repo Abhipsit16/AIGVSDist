@@ -1,0 +1,36 @@
+name: test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_USER: aigvs
+          POSTGRES_DB: aigvs
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://aigvs:test@localhost:5432/aigvs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked
+      - run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install maturin pytest
+          export PIP_CONSTRAINT="$PWD/requirements.lock"
+          maturin develop --release
+          pytest -v
+      - uses: azure/setup-helm@v4.3.0
+      - run: helm lint deploy/helm/aigvs
+      - run: helm template aigvs deploy/helm/aigvs > rendered.yaml
+      - run: docker build -t aigvs-distributed:ci .

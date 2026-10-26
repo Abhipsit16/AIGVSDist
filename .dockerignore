@@ -1,0 +1,13 @@
+.git
+.venv
+target
+dist
+**/__pycache__
+.env
+.pytest_cache
+.tools
+.test-postgres
+.test-postgres.log
+**/*.pyd
+**/*.pdb
+**/*.so

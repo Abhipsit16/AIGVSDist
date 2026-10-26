@@ -1,0 +1,25 @@
+image:
+  repository: aigvs-distributed
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+# Pre-create with database-url, api-key, internal-key. Database must already exist.
+existingSecret: aigvs-secrets
+gateway:
+  replicas: 2
+  resources:
+    requests: {cpu: "250m", memory: "256Mi"}
+    limits: {cpu: "2", memory: "1Gi"}
+worker:
+  replicas: 3
+  resources:
+    requests: {cpu: "1", memory: "2Gi"}
+    limits: {cpu: "2", memory: "4Gi"}
+rayonThreads: 2
+cacheShards: 8
+maxShardPoints: 100000
+maxShardVectorBytes: 67108864
+requestTimeout: 30
+maxConcurrentRequests: 16
+maxParallelShards: 8
+dbPoolSize: 8
+networkPolicy: true

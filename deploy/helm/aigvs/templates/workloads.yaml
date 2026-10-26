@@ -1,0 +1,108 @@
+{{- $root := . -}}
+{{- $workers := list -}}
+{{- range $i := until (int .Values.worker.replicas) -}}
+{{- $workers = append $workers (printf "http://%s-worker-%d.%s-workers:8000" $root.Release.Name $i $root.Release.Name) -}}
+{{- end -}}
+{{- range $role := list "gateway" "worker" }}
+---
+apiVersion: apps/v1
+kind: {{ if eq $role "worker" }}StatefulSet{{ else }}Deployment{{ end }}
+metadata:
+  name: {{ $root.Release.Name }}-{{ $role }}
+spec:
+  replicas: {{ (index $root.Values $role).replicas }}
+  {{- if eq $role "worker" }}
+  serviceName: {{ $root.Release.Name }}-workers
+  podManagementPolicy: Parallel
+  {{- else }}
+  strategy:
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  {{- end }}
+  selector:
+    matchLabels: {app: {{ $root.Release.Name }}, role: {{ $role }}}
+  template:
+    metadata:
+      labels: {app: {{ $root.Release.Name }}, role: {{ $role }}}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 65
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: {{ $root.Release.Name }}, role: {{ $role }}}
+      containers:
+        - name: aigvs
+          image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.tag }}"
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          ports: [{name: http, containerPort: 8000}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources: {{ index $root.Values $role "resources" | toJson }}
+          env:
+            - {name: AIGVS_ROLE, value: {{ $role | quote }}}
+            - {name: AIGVS_WORKERS, value: {{ $workers | toJson | quote }}}
+            - {name: RAYON_NUM_THREADS, value: {{ $root.Values.rayonThreads | quote }}}
+            - {name: AIGVS_CACHE_SHARDS, value: {{ $root.Values.cacheShards | quote }}}
+            - {name: AIGVS_MAX_SHARD_POINTS, value: {{ $root.Values.maxShardPoints | quote }}}
+            - {name: AIGVS_MAX_SHARD_VECTOR_BYTES, value: {{ $root.Values.maxShardVectorBytes | quote }}}
+            - {name: AIGVS_REQUEST_TIMEOUT, value: {{ $root.Values.requestTimeout | quote }}}
+            - {name: AIGVS_MAX_CONCURRENT_REQUESTS, value: {{ $root.Values.maxConcurrentRequests | quote }}}
+            - {name: AIGVS_MAX_PARALLEL_SHARDS, value: {{ $root.Values.maxParallelShards | quote }}}
+            - {name: AIGVS_DB_POOL_SIZE, value: {{ $root.Values.dbPoolSize | quote }}}
+            - name: AIGVS_DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: {{ $root.Values.existingSecret }}, key: database-url}
+            - name: AIGVS_API_KEY
+              valueFrom:
+                secretKeyRef: {name: {{ $root.Values.existingSecret }}, key: api-key}
+            - name: AIGVS_INTERNAL_KEY
+              valueFrom:
+                secretKeyRef: {name: {{ $root.Values.existingSecret }}, key: internal-key}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $root.Release.Name }}-{{ $role }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: {{ $root.Release.Name }}, role: {{ $role }}}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-gateway
+spec:
+  selector: {app: {{ .Release.Name }}, role: gateway}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-workers
+spec:
+  clusterIP: None
+  selector: {app: {{ .Release.Name }}, role: worker}
+  ports: [{name: http, port: 8000, targetPort: http}]

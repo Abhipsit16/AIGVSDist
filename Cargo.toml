@@ -1,0 +1,17 @@
+[package]
+name = "aigvs-rust"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+
+[lib]
+name = "aigvs_rust"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["abi3-py310"] }
+numpy = "0.20"
+rayon = "1.10"
+
+[features]
+extension-module = ["pyo3/extension-module"]

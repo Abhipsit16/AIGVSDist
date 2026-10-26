@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+target/
+dist/
+*.egg-info/
+.env
+.coverage
+.test-postgres/
+.test-postgres.log
+*.pyd
+*.pdb
+*.so
+.tools/

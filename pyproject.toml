@@ -1,0 +1,32 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "aigvs-distributed"
+version = "0.1.0"
+description = "Distributed snapshot-consistent search using the AIGVS Rust index"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26,<2", "fastapi>=0.115,<1", "uvicorn>=0.30,<1",
+  "httpx>=0.27,<1", "psycopg[binary,pool]>=3.2,<4",
+  "pydantic-settings>=2.5,<3", "prometheus-client>=0.21,<1"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9"]
+
+[project.scripts]
+aigvs = "aigvs.distributed.cli:main"
+
+[tool.maturin]
+python-source = "src"
+module-name = "aigvs_rust.aigvs_rust"
+python-packages = ["aigvs", "aigvs_rust"]
+features = ["extension-module"]
+exclude = ["**/__pycache__/**", "**/*.pyc", "**/*.pdb"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["integration: requires TEST_DATABASE_URL and built Rust extension"]
